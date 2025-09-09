@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Avatar - Вакансии</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        .vacancy-card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .vacancy-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .vacancy-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .vacancy-company {
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+        .vacancy-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .tag {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .upload-section {
+            display: none;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .resume-upload {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        .match-result {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .match-score {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 HR Avatar - Найдите свою вакансию</h1>
+    <p>Выберите вакансию и загрузите резюме для анализа</p>
+
+    <div id="vacanciesList">
+        
+    </div>
+
+    <div id="uploadSection" class="upload-section">
+        <h2>Загрузите ваше резюме для вакансии "<span id="selectedVacancyTitle"></span>"</h2>
+
+        <div class="resume-upload" onclick="document.getElementById('resumeFile').click()">
+            <input type="file" id="resumeFile" accept=".docx,.pdf,.txt" style="display: none;">
+            <p>📁 Нажмите для выбора файла резюме (DOCX, PDF, TXT)</p>
+            <p><small>или перетащите файл сюда</small></p>
+        </div>
+
+        <div id="fileName" style="margin: 10px 0;"></div>
+        <button onclick="analyzeResume()" id="analyzeBtn" disabled>Анализировать резюме</button>
+    </div>
+
+    <div id="matchResult" class="upload-section">
+        <div class="match-result">
+            <h2>Результат анализа</h2>
+            <div class="match-score">
+                <span id="matchPercent">0</span>%
+            </div>
+            <p>Совпадение с вакансией</p>
+            <button onclick="startInterview()" id="interviewBtn">Начать собеседование</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedVacancy = null;
+    let resumeData = null;
+
+    // Загрузка вакансий
+    async function loadVacancies() {
+        try {
+            const response = await fetch('/api/vacancies');
+            const vacancies = await response.json();
+
+            const vacanciesList = document.getElementById('vacanciesList');
+            vacancies.forEach(vacancy => {
+                const vacancyCard = document.createElement('div');
+                vacancyCard.className = 'vacancy-card';
+                vacancyCard.innerHTML = `
+                        <div class="vacancy-title">${vacancy.title}</div>
+                        <div class="vacancy-company">${vacancy.company} • ${vacancy.location}</div>
+                        <div class="vacancy-description">${vacancy.description}</div>
+                        <div class="vacancy-tags">
+                            ${vacancy.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                        </div>
+                        <div>Опыт: ${vacancy.experience}</div>
+                        <div>Зарплата: ${vacancy.salary}</div>
+                    `;
+                vacancyCard.addEventListener('click', () => selectVacancy(vacancy));
+                vacanciesList.appendChild(vacancyCard);
+            });
+        } catch (error) {
+            console.error('Ошибка загрузки вакансий:', error);
+            // Заглушка на случай ошибки
+            const vacanciesList = document.getElementById('vacanciesList');
+            vacanciesList.innerHTML = `
+                    <div class="vacancy-card" onclick="selectVacancy({
+                        id: 1,
+                        title: 'Backend Developer (Go)',
+                        company: 'TechCorp',
+                        location: 'Москва',
+                        description: 'Ищем опытного бэкенд-разработчика с знанием Go, Docker и микросервисной архитектуры.',
+                        tags: ['Go', 'Docker', 'Kubernetes', 'gRPC', 'PostgreSQL'],
+                        experience: '3+ years',
+                        salary: 'от 150 000 руб.'
+                    })">
+                        <div class="vacancy-title">Backend Developer (Go)</div>
+                        <div class="vacancy-company">TechCorp • Москва</div>
+                        <div class="vacancy-description">Ищем опытного бэкенд-разработчика с знанием Go, Docker и микросервисной архитектуры.</div>
+                        <div class="vacancy-tags">
+                            <span class="tag">Go</span>
+                            <span class="tag">Docker</span>
+                            <span class="tag">Kubernetes</span>
+                            <span class="tag">gRPC</span>
+                            <span class="tag">PostgreSQL</span>
+                        </div>
+                        <div>Опыт: 3+ years</div>
+                        <div>Зарплата: от 150 000 руб.</div>
+                    </div>
+
+                    <div class="vacancy-card" onclick="selectVacancy({
+                        id: 2,
+                        title: 'DevOps Engineer',
+                        company: 'CloudSolutions',
+                        location: 'Санкт-Петербург',
+                        description: 'Требуется DevOps инженер для настройки и поддержки CI/CD процессов.',
+                        tags: ['Docker', 'Kubernetes', 'AWS', 'CI/CD', 'Terraform'],
+                        experience: '2+ years',
+                        salary: 'от 180 000 руб.'
+                    })">
+                        <div class="vacancy-title">DevOps Engineer</div>
+                        <div class="vacancy-company">CloudSolutions • Санкт-Петербург</div>
+                        <div class="vacancy-description">Требуется DevOps инженер для настройки и поддержки CI/CD процессов.</div>
+                        <div class="vacancy-tags">
+                            <span class="tag">Docker</span>
+                            <span class="tag">Kubernetes</span>
+                            <span class="tag">AWS</span>
+                            <span class="tag">CI/CD</span>
+                            <span class="tag">Terraform</span>
+                        </div>
+                        <div>Опыт: 2+ years</div>
+                        <div>Зарплата: от 180 000 руб.</div>
+                    </div>
+                `;
+        }
+    }
+
+    function selectVacancy(vacancy) {
+        selectedVacancy = vacancy;
+        document.getElementById('selectedVacancyTitle').textContent = vacancy.title;
+        document.getElementById('uploadSection').style.display = 'block';
+        document.getElementById('matchResult').style.display = 'none';
+
+        // Прокрутка к разделу загрузки
+        document.getElementById('uploadSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Обработка загрузки файла
+    document.getElementById('resumeFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('fileName').textContent = `Выбран файл: ${file.name}`;
+            document.getElementById('analyzeBtn').disabled = false;
+
+            // Чтение файла
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                resumeData = {
+                    name: file.name,
+                    content: e.target.result,
+                    type: file.type
+                };
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    // Анализ резюме
+    async function analyzeResume() {
+        if (!selectedVacancy || !resumeData) return;
+
+        try {
+            const response = await fetch('/api/analyze-resume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    vacancy: selectedVacancy,
+                    resume: resumeData
+                })
+            });
+
+            const result = await response.json();
+            if (result.match_score) {
+                document.getElementById('matchPercent').textContent = result.match_score;
+                localStorage.setItem('matchScore', result.match_score);
+            }
+            if (result.feedback) {
+                console.log("Фидбек по резюме:", result.feedback);
+            }
+
+            document.getElementById('matchResult').style.display = 'block';
+            document.getElementById('matchResult').scrollIntoView({ behavior: 'smooth' });
+
+        } catch (error) {
+            console.error('Ошибка анализа резюме:', error);
+            alert("Ошибка при анализе резюме. Попробуйте позже.");
+        }
+    }
+
+
+    // Начать собеседование
+    function startInterview() {
+        if (!selectedVacancy) return;
+
+        // Сохраняем данные в localStorage для использования на странице интервью
+        localStorage.setItem('selectedVacancy', JSON.stringify(selectedVacancy));
+        localStorage.setItem('resumeData', JSON.stringify(resumeData));
+
+        // Переходим на страницу интервью
+        window.location.href = 'interview.html';
+    }
+
+    // Загрузка вакансий при старте
+    loadVacancies();
+</script>
+</body>
+</html>
